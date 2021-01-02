@@ -7,6 +7,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\DependencyInjection\ParameterBag\ContainerBagInterface;
 
 /**
  * @ORM\Entity(repositoryClass=UserRepository::class)
@@ -17,6 +18,8 @@ class User implements UserInterface
     public const ROLE_STUDENT = 'ROLE_STUDENT';
     public const ROLE_ASSISTANT = 'ROLE_ASSISTANT';
     public const ROLE_LAB_ASSISTANT = 'ROLE_LAB_ASSISTANT';
+
+    private $userLabAssistant;
 
     /**
      * @ORM\Id
@@ -55,9 +58,10 @@ class User implements UserInterface
      */
     private $refreshTokens;
 
-    public function __construct()
+    public function __construct(ContainerBagInterface $params)
     {
         $this->refreshTokens = new ArrayCollection();
+        $this->userLabAssistant = $params->get('user.labAssistant');
     }
 
     public function getId(): ?int
@@ -95,6 +99,10 @@ class User implements UserInterface
         $roles = $this->roles;
         // guarantee every user at least has ROLE_USER
         $roles[] = 'ROLE_USER';
+
+        if ($this->getEmail() === $this->userLabAssistang) {
+            $roles[] = 'ROLE_LAB_ASSISTANT';
+        }
 
         return array_unique($roles);
     }
