@@ -20,7 +20,7 @@ class UserRepository extends ServiceEntityRepository
         parent::__construct($registry, User::class);
     }
 
-    public function findWithMicrosoftIdEmailOrStudentId(string $microsoftId, string $email, string $studentId): ? array
+    public function findWithMicrosoftIdEmailOrStudentId(string $microsoftId, string $email, string $studentId)
     {
         $query = $this->getEntityManager()->createQuery(
             '

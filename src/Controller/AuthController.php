@@ -13,6 +13,7 @@ use Microsoft\Graph\Model;
 use App\Repository\UserRepository;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 
 class AuthController extends AbstractController
 {
@@ -40,7 +41,7 @@ class AuthController extends AbstractController
     /**
      * @Route("/auth/check", methods={"GET"}, name="connect_azure_check")
      */
-    public function checkAzure(Request $request, ClientRegistry $clientRegistry)
+    public function checkAzure(Request $request, ClientRegistry $clientRegistry, JWTTokenManagerInterface $JWTManager)
     {
         $client = $clientRegistry->getClient('azure');
 
@@ -72,7 +73,7 @@ class AuthController extends AbstractController
 
             $this->entityManager->flush();
 
-            var_dump($user); die;
+            var_dump($JWTManager->create($user)); die;
         } catch (IdentityProviderException $e) {
             var_dump($e->getMessage()); die;
         }
