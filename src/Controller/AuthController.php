@@ -2,18 +2,21 @@
 
 namespace App\Controller;
 
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Routing\Annotation\Route;
+use App\Entity\RefreshToken;
+use App\Entity\User;
+use App\Repository\UserRepository;
+use App\Service\Security\RefreshTokenCreator;
+use Doctrine\ORM\EntityManagerInterface;
 use KnpU\OAuth2ClientBundle\Client\ClientRegistry;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Microsoft\Graph\Graph;
 use Microsoft\Graph\Model;
-use App\Repository\UserRepository;
-use App\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Cookie;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
 
 class AuthController extends AbstractController
 {
@@ -41,41 +44,91 @@ class AuthController extends AbstractController
     /**
      * @Route("/auth/check", methods={"GET"}, name="connect_azure_check")
      */
-    public function checkAzure(Request $request, ClientRegistry $clientRegistry, JWTTokenManagerInterface $JWTManager)
-    {
+    public function checkAzure(
+        Request $request,
+        ClientRegistry $clientRegistry,
+        JWTTokenManagerInterface $JWTManager,
+        RefreshTokenCreator $refreshTokenCreator
+    ) {
         $client = $clientRegistry->getClient('azure');
 
         try {
-            $accessToken = $client->getAccessToken();
-            $graph = new Graph();
-            $graph->setAccessToken($accessToken);
+            $microsoftUser = $this->getMicrosoftUser($client);
 
-            $microsoftUser = $graph->createRequest('GET', '/me')
-                ->setReturnType(Model\User::class)
-                ->execute();
+            $user = $this->checkExistingOrCreateUser($microsoftUser);
 
-            $microsoftId = $microsoftUser->getId();
-            $email = $microsoftUser->getMail();
-            $studentId = $microsoftUser->getSurname();
+            $accessToken = $JWTManager->create($user);
+            $refreshToken = $refreshTokenCreator->create($user);
 
-            $user = $this->repository->findWithMicrosoftIdEmailOrStudentId($microsoftId, $email, $studentId);
+            $cookie = $this->createRefreshTokenCookie($refreshToken);
 
-            if (! $user) {
-                $user = new User();
-                $this->entityManager->persist($user);
-            }
+            $response = $this->render('auth/token.html.twig', compact('accessToken'));
+            $response->headers->setCookie($cookie);
 
-            $user->setName($microsoftUser->getDisplayName());
-            $user->setStudentId($studentId);
-            $user->setEmail($email);
-            $user->setMicrosoftId($microsoftId);
-            $user->addRole(User::ROLE_STUDENT);
-
-            $this->entityManager->flush();
-
-            var_dump($JWTManager->create($user)); die;
+            return $response;
         } catch (IdentityProviderException $e) {
             var_dump($e->getMessage()); die;
         }
+    }
+
+    /**
+     * Create httpOnly cookie to store generated refresh token
+     * @param  RefreshToken $refreshToken Generated refresh token
+     * @return Cookie                     Generated cookie
+     */
+    private function createRefreshTokenCookie(RefreshToken $refreshToken): Cookie
+    {
+        return Cookie::create('prikaRefreshToken')
+            ->withValue($refreshToken->getRefreshToken())
+            ->withExpires($refreshToken->getValidUntil())
+            ->withDomain($this->getParameter('app.url'))
+            ->withHttpOnly(true);
+    }
+
+    /**
+     * Check wether user already exist and return it or create new user also save the user to database
+     * @param  ModelUser $microsoftUser Fetched Microsoft user
+     * @return User                     Existing or new created user
+     */
+    private function checkExistingOrCreateUser(Model\User $microsoftUser): User
+    {
+        $microsoftId = $microsoftUser->getId();
+        $email = $microsoftUser->getMail();
+        $studentId = $microsoftUser->getSurname();
+
+        $user = $this->repository->findWithMicrosoftIdEmailOrStudentId($microsoftId, $email, $studentId);
+
+        if (! $user) {
+            $user = new User();
+            $this->entityManager->persist($user);
+        }
+
+        $user->setName($microsoftUser->getDisplayName());
+        $user->setStudentId($studentId);
+        $user->setEmail($email);
+        $user->setMicrosoftId($microsoftId);
+        $user->addRole(User::ROLE_STUDENT);
+
+        $this->entityManager->flush();
+
+        return $user;
+    }
+
+    /**
+     * Fetch user info from access token aqcuired from oauth client
+     * @param  [type]     $client Azure oauth client
+     * @return ModelUser         Microsoft graph user model
+     */
+    private function getMicrosoftUser($client): Model\User
+    {
+        $accessToken = $client->getAccessToken();
+        $graph = new Graph();
+        $graph->setAccessToken($accessToken);
+
+        $microsoftUser = $graph->createRequest('GET', '/me')
+            ->setReturnType(Model\User::class)
+            ->execute();
+
+        return $microsoftUser;
     }
 }
