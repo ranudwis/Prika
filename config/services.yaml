@@ -6,6 +6,7 @@
 parameters:
     app.url: '%env(APP_URL)%'
     user.labAssistant: '%env(USER_LAB_ASSISTANT)%'
+    app.frontendDashboardUrl: '%env(APP_FRONTEND_DASHBOARD_URL)%'
 
 services:
     # default configuration for services in *this* file

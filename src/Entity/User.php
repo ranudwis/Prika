@@ -100,7 +100,7 @@ class User implements UserInterface
         // guarantee every user at least has ROLE_USER
         $roles[] = 'ROLE_USER';
 
-        if ($this->getEmail() === $this->userLabAssistang) {
+        if ($this->getEmail() === $this->userLabAssistant) {
             $roles[] = 'ROLE_LAB_ASSISTANT';
         }
 

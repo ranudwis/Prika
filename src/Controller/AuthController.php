@@ -9,7 +9,6 @@ use App\Service\Security\RefreshTokenCreator;
 use Doctrine\ORM\EntityManagerInterface;
 use KnpU\OAuth2ClientBundle\Client\ClientRegistry;
 use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Microsoft\Graph\Graph;
 use Microsoft\Graph\Model;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -47,7 +46,6 @@ class AuthController extends AbstractController
     public function checkAzure(
         Request $request,
         ClientRegistry $clientRegistry,
-        JWTTokenManagerInterface $JWTManager,
         RefreshTokenCreator $refreshTokenCreator
     ) {
         $client = $clientRegistry->getClient('azure');
@@ -57,12 +55,11 @@ class AuthController extends AbstractController
 
             $user = $this->checkExistingOrCreateUser($microsoftUser);
 
-            $accessToken = $JWTManager->create($user);
             $refreshToken = $refreshTokenCreator->create($user);
-
             $cookie = $this->createRefreshTokenCookie($refreshToken);
+            $redirectUrl = $this->getParameter('app.frontendDashboardUrl');
 
-            $response = $this->render('auth/token.html.twig', compact('accessToken'));
+            $response = $this->render('auth/token.html.twig', compact('redirectUrl'));
             $response->headers->setCookie($cookie);
 
             return $response;
